@@ -10,7 +10,7 @@ Hexagonal Architecture(Ports & Adapters)는 비즈니스 로직을 외부 인프
 
 | 흐름 | Adapter | Port | Core |
 |------|---------|------|------|
-| **Inbound** (외부 → 내부) | Web Handler, SSE, WebSocket | UseCase Interface (Inbound Port) | Application Service → Domain |
+| **Inbound** (외부 → 내부) | Controller, SSE, WebSocket | UseCase Interface (Inbound Port) | Application Service → Domain |
 | **Outbound** (내부 → 외부) | R2DBC, WebClient, Redis | Repository Interface (Outbound Port) | Application Service ← Domain |
 
 | 구성요소 | 역할 | 위치 |
@@ -89,51 +89,39 @@ interface NotificationPort {
 
 ## Inbound Adapter
 
-WebFlux Handler가 Inbound Port(UseCase)를 호출한다.
+`@RestController`가 Inbound Port(UseCase)를 호출한다.
 
 ```kotlin
-// adapter/in/web/handler/OrderHandler.kt
-@Component
-class OrderHandler(
+// adapter/in/web/controller/OrderController.kt
+@RestController
+@RequestMapping("/api/v1/orders")
+class OrderController(
     private val createOrderUseCase: CreateOrderUseCase,
     private val getOrderUseCase: GetOrderUseCase,
 ) {
-    suspend fun createOrder(request: ServerRequest): ServerResponse {
-        val body = request.awaitBody<CreateOrderRequest>()
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    suspend fun create(@RequestBody body: CreateOrderRequest): OrderResponse {
         val command = body.toCommand()
         val order = createOrderUseCase.execute(command)
-        return ServerResponse.status(HttpStatus.CREATED)
-            .bodyValueAndAwait(order.toResponse())
+        return order.toResponse()
     }
 
-    suspend fun getOrder(request: ServerRequest): ServerResponse {
-        val id = request.pathVariable("id")
+    @GetMapping("/{id}")
+    suspend fun getById(@PathVariable id: String): OrderResponse {
         val order = getOrderUseCase.execute(GetOrderQuery(id))
-        return order?.let {
-            ServerResponse.ok().bodyValueAndAwait(it.toResponse())
-        } ?: ServerResponse.notFound().buildAndAwait()
-    }
-}
-
-// adapter/in/web/router/OrderRouter.kt
-@Configuration
-class OrderRouter {
-    @Bean
-    fun orderRoutes(handler: OrderHandler) = coRouter {
-        "/api/v1/orders".nest {
-            POST("", handler::createOrder)
-            GET("/{id}", handler::getOrder)
-        }
+            ?: throw OrderNotFoundException(OrderId(id))
+        return order.toResponse()
     }
 }
 ```
 
 | 규칙 | 설명 |
 |------|------|
-| Handler + Router 분리 | Handler는 로직, Router는 경로 매핑 |
+| `@RestController` | 어노테이션 기반 Controller 사용 |
 | DTO 변환 | Adapter에서 DTO <-> Command/Domain 변환 |
-| UseCase만 호출 | Handler는 UseCase(Port) 인터페이스만 의존 |
-| 비즈니스 로직 금지 | Handler에 비즈니스 로직을 넣지 않는다 |
+| UseCase만 호출 | Controller는 UseCase(Port) 인터페이스만 의존 |
+| 비즈니스 로직 금지 | Controller에 비즈니스 로직을 넣지 않는다 |
 
 ---
 
@@ -184,7 +172,16 @@ data class OrderEntity(
 | Port 구현 | Outbound Port 인터페이스를 구현 |
 | 매퍼 사용 | Entity <-> Domain 변환은 반드시 매퍼를 통해 |
 | 인프라 캡슐화 | R2DBC, WebClient 등 인프라 상세는 Adapter 내부에 은닉 |
-| Spring 어노테이션 허용 | Adapter에서만 `@Repository`, `@Component` 등 사용 가능 |
+| DAO | `CoroutineCrudRepository`를 상속하여 정의 |
+
+### Outbound Adapter 어노테이션 규칙
+
+| Adapter 종류 | 어노테이션 | 이유 |
+|-------------|-----------|------|
+| DB Persistence Adapter | `@Repository` | Spring persistence 예외 자동 변환 적용 |
+| 외부 API Client | `@Component` | DB 예외 변환이 불필요 |
+| Redis Cache Adapter | `@Component` | DB 예외 변환이 불필요 |
+| Message Producer | `@Component` | DB 예외 변환이 불필요 |
 
 ---
 
@@ -197,7 +194,7 @@ data class OrderEntity(
 | 3 | `application/port/out/` | Outbound Port (Repository 인터페이스) 정의 |
 | 4 | `application/service/` | UseCase 구현 (Application Service) |
 | 5 | `adapter/out/` | Outbound Adapter 구현 (DB, 외부 API 등) |
-| 6 | `adapter/in/` | Inbound Adapter 구현 (Handler, Router) |
+| 6 | `adapter/in/` | Inbound Adapter 구현 (Controller) |
 | 7 | 각 단계마다 | TDD: 테스트를 먼저 작성하고 구현 |
 
 ---
@@ -227,11 +224,11 @@ class OrderPersistenceAdapter(...) : OrderRepository {
 @Table("orders")
 data class Order(...)  // 금지: 도메인에 Spring Data 의존
 
-// DO -- Handler에서 UseCase(Port) 호출
-class OrderHandler(private val createOrderUseCase: CreateOrderUseCase)
+// DO -- Controller에서 UseCase(Port) 호출
+class OrderController(private val createOrderUseCase: CreateOrderUseCase)
 
-// DON'T -- Handler에서 Repository 직접 호출
-class OrderHandler(private val orderRepository: OrderRepository)  // 금지: 계층 건너뜀
+// DON'T -- Controller에서 Repository 직접 호출
+class OrderController(private val orderRepository: OrderRepository)  // 금지: 계층 건너뜀
 ```
 
 ---
@@ -241,7 +238,7 @@ class OrderHandler(private val orderRepository: OrderRepository)  // 금지: 계
 - [ ] 의존 방향이 안쪽(도메인)을 향하는가?
 - [ ] Port 인터페이스가 도메인 모델만 사용하는가?
 - [ ] Adapter가 Port 인터페이스를 구현하는가?
-- [ ] Handler가 UseCase(Port)만 호출하는가? (Repository 직접 호출 아님)
+- [ ] Controller가 UseCase(Port)만 호출하는가? (Repository 직접 호출 아님)
 - [ ] 도메인 레이어에 Spring/인프라 어노테이션이 유입되지 않았는가?
 - [ ] 계층 간 데이터 이동에 매퍼를 사용하는가?
 - [ ] 새 Port/Adapter 추가 시 DI 설정을 갱신했는가?

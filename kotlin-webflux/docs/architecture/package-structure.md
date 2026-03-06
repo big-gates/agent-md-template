@@ -11,8 +11,7 @@
 
 | 패키지 경로 | 설명 |
 |------------|------|
-| `{domain}/adapter/in/web/handler/` | WebFlux Handler (Functional Endpoint) |
-| `{domain}/adapter/in/web/router/` | Router 설정 |
+| `{domain}/adapter/in/web/controller/` | `@RestController` (어노테이션 기반) |
 | `{domain}/adapter/in/web/dto/request/` | Request DTO |
 | `{domain}/adapter/in/web/dto/response/` | Response DTO |
 | `{domain}/adapter/in/web/mapper/` | DTO <-> Domain 매퍼 |
@@ -59,8 +58,7 @@
 
 | 파일 종류 | 위치 | 예시 |
 |-----------|------|------|
-| REST Handler | `{domain}/adapter/in/web/handler/` | `OrderHandler.kt` |
-| Router 설정 | `{domain}/adapter/in/web/router/` | `OrderRouter.kt` |
+| Controller | `{domain}/adapter/in/web/controller/` | `OrderController.kt` |
 | Request DTO | `{domain}/adapter/in/web/dto/request/` | `CreateOrderRequest.kt` |
 | Response DTO | `{domain}/adapter/in/web/dto/response/` | `OrderResponse.kt` |
 | DTO Mapper | `{domain}/adapter/in/web/mapper/` | `OrderDtoMapper.kt` |
@@ -86,8 +84,7 @@
 
 | 구분 | 접미사 패턴 | 예시 |
 |------|-----------|------|
-| Handler | `{Domain}Handler` | `OrderHandler` |
-| Router | `{Domain}Router` | `OrderRouter` |
+| Controller | `{Domain}Controller` | `OrderController` |
 | UseCase | `{Action}{Domain}UseCase` | `CreateOrderUseCase` |
 | Application Service | `{Domain}Service` | `OrderService` |
 | Domain Service | `{Domain}DomainService` | `PricingDomainService` |
@@ -111,7 +108,7 @@
 | `{domain}/domain/model/` | Domain Model 단위 테스트 | `OrderTest.kt`, `MoneyTest.kt` |
 | `{domain}/domain/service/` | Domain Service 단위 테스트 | `PricingServiceTest.kt` |
 | `{domain}/application/service/` | UseCase 단위 테스트 | `OrderServiceTest.kt` |
-| `{domain}/adapter/in/web/handler/` | Handler 통합 테스트 | `OrderHandlerIntegrationTest.kt` |
+| `{domain}/adapter/in/web/controller/` | Controller 통합 테스트 | `OrderControllerIntegrationTest.kt` |
 | `{domain}/adapter/out/persistence/` | Repository Adapter 통합 테스트 | `OrderPersistenceAdapterTest.kt` |
 | `fixture/` | 공유 테스트 픽스처 / Fake | `OrderFixture.kt`, `FakeOrderRepository.kt` |
 

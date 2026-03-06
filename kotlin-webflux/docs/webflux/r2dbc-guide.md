@@ -8,10 +8,10 @@
 
 | 원칙 | 설명 |
 |------|------|
-| **코루틴 Repository** | `CoroutineCrudRepository` 사용. `suspend` 함수와 `Flow` 반환 |
+| **DAO** | `CoroutineCrudRepository`를 상속하여 정의. Spring Data가 구현체 자동 생성 |
+| **Persistence Adapter** | `@Repository` 어노테이션. DAO를 감싸서 Outbound Port를 구현 |
 | **Entity 격리** | R2DBC Entity는 `adapter/out/persistence/entity/`에만 존재. 도메인에 노출 금지 |
 | **매퍼 필수** | Entity <-> Domain 변환은 반드시 매퍼를 통해 |
-| **Repository Adapter** | Spring Data R2DBC Repository를 직접 노출하지 않고 Adapter로 감싼다 |
 
 ---
 

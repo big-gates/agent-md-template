@@ -21,9 +21,8 @@
 | `application/port/in/**` | [usecase-guide.md](docs/domain/usecase-guide.md), [hexagonal-guide.md](docs/architecture/hexagonal-guide.md) |
 | `application/port/out/**` | [hexagonal-guide.md](docs/architecture/hexagonal-guide.md), [r2dbc-guide.md](docs/webflux/r2dbc-guide.md) |
 | `application/service/**` | [usecase-guide.md](docs/domain/usecase-guide.md) |
-| `adapter/in/web/handler/**` | [webflux-guide.md](docs/webflux/webflux-guide.md), [hexagonal-guide.md](docs/architecture/hexagonal-guide.md) |
-| `adapter/in/web/router/**` | [webflux-guide.md](docs/webflux/webflux-guide.md) |
-| `adapter/in/web/dto/**` | [webflux-guide.md](docs/webflux/webflux-guide.md), [api-design-guide.md](docs/convention/api-design-guide.md) |
+| `adapter/in/web/controller/**` | [webflux-guide.md](docs/webflux/webflux-guide.md), [hexagonal-guide.md](docs/architecture/hexagonal-guide.md), [api-spec-guide.md](docs/convention/api-spec-guide.md) |
+| `adapter/in/web/dto/**` | [webflux-guide.md](docs/webflux/webflux-guide.md), [api-design-guide.md](docs/convention/api-design-guide.md), [api-spec-guide.md](docs/convention/api-spec-guide.md) |
 | `adapter/in/web/mapper/**` | [hexagonal-guide.md](docs/architecture/hexagonal-guide.md) |
 | `adapter/in/sse/**` | [sse-guide.md](docs/webflux/sse-guide.md) |
 | `adapter/in/websocket/**` | [websocket-guide.md](docs/webflux/websocket-guide.md) |
@@ -37,6 +36,7 @@
 | `**/fixture/**`, `**/Fake*.kt` | [fixture-guide.md](docs/testing/fixture-guide.md) |
 | `**/integration/**` | [integration-test-guide.md](docs/testing/integration-test-guide.md) |
 | `db/migration/**` | [r2dbc-guide.md](docs/webflux/r2dbc-guide.md) |
+| `docs/api-specs/**` | [api-spec-guide.md](docs/convention/api-spec-guide.md), [api-design-guide.md](docs/convention/api-design-guide.md) |
 
 ---
 
@@ -101,8 +101,7 @@
 | Command / Query | `{domain}/application/port/in/command/` | UseCase 입력 객체 |
 | Repository 인터페이스 | `{domain}/application/port/out/` | Outbound Port (의존성 역전) |
 | Application Service | `{domain}/application/service/` | UseCase 구현 |
-| REST Handler | `{domain}/adapter/in/web/handler/` | HTTP 요청 처리 (suspend) |
-| Router | `{domain}/adapter/in/web/router/` | coRouter 경로 매핑 |
+| Controller | `{domain}/adapter/in/web/controller/` | `@RestController` HTTP 요청 처리 (suspend) |
 | Request/Response DTO | `{domain}/adapter/in/web/dto/` | API 직렬화/역직렬화 |
 | DTO Mapper | `{domain}/adapter/in/web/mapper/` | DTO <-> Domain 변환 |
 | SSE Handler | `{domain}/adapter/in/sse/handler/` | SSE 스트리밍 |
@@ -152,7 +151,7 @@
 
 | 문서 | 읽어야 할 때 |
 |------|-------------|
-| [webflux-guide.md](docs/webflux/webflux-guide.md) | Handler, Router, 함수형 엔드포인트 작성 시 |
+| [webflux-guide.md](docs/webflux/webflux-guide.md) | Controller, 엔드포인트 작성 시 |
 | [coroutine-flow-guide.md](docs/webflux/coroutine-flow-guide.md) | suspend/Flow 패턴, 스트림 합성, 동시성 확인 시 |
 | [sse-guide.md](docs/webflux/sse-guide.md) | SSE 실시간 스트리밍 구현 시 |
 | [websocket-guide.md](docs/webflux/websocket-guide.md) | WebSocket 양방향 통신 구현 시 |
@@ -182,12 +181,14 @@
 | [git-commit-template.md](docs/convention/git-commit-template.md) | 커밋 메시지 작성 시 |
 | [pull-request-template.md](docs/convention/pull-request-template.md) | PR 작성 시 |
 | [api-design-guide.md](docs/convention/api-design-guide.md) | REST/스트리밍 API 설계 시 |
+| [api-spec-guide.md](docs/convention/api-spec-guide.md) | API Spec 문서 작성, 프론트엔드 공유용 API 명세 생성 시 |
 
 ---
 
 ## 문서 운영 규칙
 
 - 새 Adapter 추가 시 해당 영역 문서를 갱신하고 `docs/architecture/README.md` 인덱스에 등록한다.
+- 새 엔드포인트 추가 시 `docs/api-specs/{domain}.md`에 API Spec을 작성한다. 작성 규칙은 [api-spec-guide.md](docs/convention/api-spec-guide.md)를 따른다.
 - Hexagonal + Clean Architecture + DDD + TDD 원칙은 모든 코드에 적용한다.
 - 도메인 레이어는 순수 Kotlin만 허용. Spring 의존 금지.
 - 매퍼 추가/변경 시 매퍼 테스트를 반드시 함께 작성한다.

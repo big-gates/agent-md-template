@@ -1,6 +1,6 @@
 # WebFlux Guide
 
-> **트리거**: Handler, Router, Functional Endpoint를 작성·수정할 때 이 문서를 참조한다.
+> **트리거**: Controller, 엔드포인트를 작성·수정할 때 이 문서를 참조한다.
 
 ---
 
@@ -8,93 +8,59 @@
 
 | 원칙 | 설명 |
 |------|------|
-| **Functional Endpoint** | `@Controller` 대신 Handler + coRouter 조합 사용 |
-| **코루틴 전용** | 모든 Handler는 `suspend` 함수. 블로킹 호출 금지 |
-| **coRouter** | `coRouter {}` DSL로 경로 매핑 |
+| **@RestController** | 어노테이션 기반 Controller 사용 |
+| **코루틴 전용** | 모든 Controller 메서드는 `suspend` 함수. 블로킹 호출 금지 |
+| **@RequestMapping** | 클래스 레벨에 공통 경로, 메서드 레벨에 세부 경로 매핑 |
 | **Flow 스트리밍** | 실시간 스트림은 `Flow`로 처리 |
 
 ---
 
-## Handler
+## Controller
 
-Handler는 HTTP 요청을 처리하는 suspend 함수를 정의한다.
+Controller는 HTTP 요청을 처리하는 suspend 함수를 정의한다.
 
 ```kotlin
-// adapter/in/web/handler/OrderHandler.kt
-@Component
-class OrderHandler(
+// adapter/in/web/controller/OrderController.kt
+@RestController
+@RequestMapping("/api/v1/orders")
+class OrderController(
     private val createOrderUseCase: CreateOrderUseCase,
     private val getOrderUseCase: GetOrderUseCase,
     private val getOrdersStreamUseCase: GetOrdersStreamUseCase,
 ) {
-    suspend fun create(request: ServerRequest): ServerResponse {
-        val body = request.awaitBody<CreateOrderRequest>()
-        validate(body)
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    suspend fun create(@RequestBody body: CreateOrderRequest): OrderResponse {
+        require(body.customerId.isNotBlank()) { "customerId는 필수" }
+        require(body.items.isNotEmpty()) { "주문 항목은 1개 이상 필요" }
         val command = body.toCommand()
         val order = createOrderUseCase.execute(command)
-        return ServerResponse.status(HttpStatus.CREATED)
-            .bodyValueAndAwait(order.toResponse())
+        return order.toResponse()
     }
 
-    suspend fun getById(request: ServerRequest): ServerResponse {
-        val id = request.pathVariable("id")
+    @GetMapping("/{id}")
+    suspend fun getById(@PathVariable id: String): OrderResponse {
         val order = getOrderUseCase.execute(GetOrderQuery(id))
-        return order?.let {
-            ServerResponse.ok().bodyValueAndAwait(it.toResponse())
-        } ?: ServerResponse.notFound().buildAndAwait()
+            ?: throw OrderNotFoundException(OrderId(id))
+        return order.toResponse()
     }
 
-    suspend fun streamByCustomer(request: ServerRequest): ServerResponse {
-        val customerId = request.pathVariable("customerId")
-        val ordersFlow = getOrdersStreamUseCase.execute(GetOrdersStreamQuery(customerId))
+    @GetMapping("/stream/customer/{customerId}", produces = [MediaType.APPLICATION_NDJSON_VALUE])
+    fun streamByCustomer(@PathVariable customerId: String): Flow<OrderResponse> {
+        return getOrdersStreamUseCase.execute(GetOrdersStreamQuery(customerId))
             .map { it.toResponse() }
-        return ServerResponse.ok()
-            .contentType(MediaType.APPLICATION_NDJSON)
-            .bodyAndAwait(ordersFlow)
-    }
-
-    private fun validate(request: CreateOrderRequest) {
-        require(request.customerId.isNotBlank()) { "customerId는 필수" }
-        require(request.items.isNotEmpty()) { "주문 항목은 1개 이상 필요" }
     }
 }
 ```
 
 | 규칙 | 설명 |
 |------|------|
-| `@Component` | Handler는 Spring Bean으로 등록 |
-| `suspend fun` | 모든 Handler 함수는 suspend |
+| `@RestController` | Controller는 `@RestController`로 등록 |
+| `suspend fun` | 단일 결과를 반환하는 모든 메서드는 suspend |
+| `Flow<T>` 반환 | 스트리밍 응답은 `Flow`를 직접 반환 (suspend 아님) |
 | UseCase(Port) 의존 | Repository 직접 호출 금지 |
-| DTO 변환 | Handler에서 Request DTO -> Command, Domain -> Response DTO 변환 |
-| 비즈니스 로직 금지 | Handler에 비즈니스 로직을 넣지 않는다 |
-
----
-
-## Router
-
-경로 매핑을 정의한다. Handler와 분리하여 관리한다.
-
-```kotlin
-// adapter/in/web/router/OrderRouter.kt
-@Configuration
-class OrderRouter {
-    @Bean
-    fun orderRoutes(handler: OrderHandler) = coRouter {
-        "/api/v1/orders".nest {
-            POST("", handler::create)
-            GET("/{id}", handler::getById)
-            GET("/stream/customer/{customerId}", handler::streamByCustomer)
-        }
-    }
-}
-```
-
-| 규칙 | 설명 |
-|------|------|
-| `coRouter {}` | 코루틴 DSL로 경로 정의 |
-| 도메인별 분리 | Router는 도메인(Bounded Context) 단위로 분리 |
-| 버전 포함 | `/api/v1/` 접두사 |
-| `nest` 사용 | 공통 경로 접두사를 `nest`로 그룹핑 |
+| DTO 변환 | Controller에서 Request DTO -> Command, Domain -> Response DTO 변환 |
+| 비즈니스 로직 금지 | Controller에 비즈니스 로직을 넣지 않는다 |
 
 ---
 
@@ -150,7 +116,7 @@ fun Order.toResponse() = OrderResponse(
 
 | 검증 위치 | 검증 내용 |
 |-----------|----------|
-| Adapter (Handler) | 포맷 검증 (null, blank, 형식) |
+| Adapter (Controller) | 포맷 검증 (null, blank, 형식) |
 | Command `init` | 비즈니스 입력 검증 (값 범위, 필수 필드) |
 | Domain Model | 불변식 검증 (비즈니스 규칙) |
 
@@ -159,23 +125,19 @@ fun Order.toResponse() = OrderResponse(
 ## Flow 스트리밍 응답
 
 ```kotlin
-// NDJSON 스트리밍
-suspend fun streamOrders(request: ServerRequest): ServerResponse {
-    val flow = orderUseCase.executeStream()
+// NDJSON 스트리밍 - Flow를 직접 반환
+@GetMapping("/stream", produces = [MediaType.APPLICATION_NDJSON_VALUE])
+fun streamOrders(): Flow<OrderResponse> {
+    return orderUseCase.executeStream()
         .map { it.toResponse() }
-    return ServerResponse.ok()
-        .contentType(MediaType.APPLICATION_NDJSON)
-        .bodyAndAwait(flow)
 }
 
 // SSE 스트리밍 (Flow -> Flux 변환 필요)
-suspend fun streamSse(request: ServerRequest): ServerResponse {
-    val sseFlux = notificationUseCase.execute(query)
+@GetMapping("/sse", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+fun streamSse(): Flux<ServerSentEvent<NotificationResponse>> {
+    return notificationUseCase.execute(query)
         .map { ServerSentEvent.builder(it.toResponse()).event("notification").build() }
         .asFlux()  // Flow -> Flux 변환 (SSE에서는 Flux 필요)
-    return ServerResponse.ok()
-        .contentType(MediaType.TEXT_EVENT_STREAM)
-        .bodyAndAwait(sseFlux)
 }
 ```
 
@@ -183,9 +145,8 @@ suspend fun streamSse(request: ServerRequest): ServerResponse {
 
 ## 변경 시 체크리스트
 
-- [ ] Handler가 UseCase(Port)만 호출하는가?
+- [ ] Controller가 UseCase(Port)만 호출하는가?
 - [ ] DTO가 Adapter 내부에만 존재하는가?
-- [ ] Handler에 비즈니스 로직이 없는가?
-- [ ] Router와 Handler가 분리되어 있는가?
-- [ ] 모든 Handler 함수가 `suspend`인가?
+- [ ] Controller에 비즈니스 로직이 없는가?
+- [ ] 모든 단일 응답 메서드가 `suspend`인가?
 - [ ] 블로킹 호출이 없는가?
